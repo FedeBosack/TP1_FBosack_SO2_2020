@@ -2,7 +2,7 @@
 
 int32_t main( int32_t argc, char *argv[] ) 
 {
-	int32_t sockfd, puerto,terminar=0,recibir=0;
+	int32_t puerto,terminar=0,recibir=0;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 
@@ -39,7 +39,12 @@ int32_t main( int32_t argc, char *argv[] )
 		perror( "Error de conexion" );
 		exit( 1 );
 	}
-
+	//nuevo
+	// activar handler para SIGINT
+	struct sigaction sa;
+	sa.sa_handler = salida;
+	sigaction(SIGINT, &sa,  NULL);
+	//
 	while(1)
 	{
 		memset( buffer, '\0', TAM );
@@ -88,4 +93,4 @@ int32_t main( int32_t argc, char *argv[] )
 
 	}
 	return 0;
-} 
+}

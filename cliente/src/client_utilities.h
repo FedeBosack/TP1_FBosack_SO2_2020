@@ -19,8 +19,10 @@
 #define BUFFSIZE 256
 #define TAM 256
 #define DEFAULT_HOST "127.0.0.1"
+int32_t sockfd;
 
 //funciones
 void servidor2();
 void recibirArchivo(int32_t newsockfd);
 char *obtenerMD5(char *filename,int32_t tamanio);
+void salida(int32_t);

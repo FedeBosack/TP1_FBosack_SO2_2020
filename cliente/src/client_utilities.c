@@ -129,3 +129,16 @@ char *obtenerMD5(char *filename,int32_t tamanio)
     
     return md5;
 }
+/**
+ * Handler de para terminar la conexion del cliente
+ * se llama cuando se presiona Ctrl + C
+ */
+void salida(int32_t sig) 
+{
+	if(sig>0) 
+	{
+		printf("Aprete Ctrl-C , Chau!\n");
+		send(sockfd,"exit\n",strlen("exit\n"),0);
+	}
+	exit(0);
+}
