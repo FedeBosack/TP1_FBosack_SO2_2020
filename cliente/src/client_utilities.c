@@ -49,41 +49,6 @@ void servidor2()
 	close(newsockfd);		
 }
 /**
- * @brief recibe un archivo y lo escribe en la direccion deseada
- * @param int32_t newsockfd : sockfd del cliente que envia el archio
- * */
-
-void recibirArchivo(int32_t newsockfd)
-{
-	FILE *file;
-	char buffer[BUFFSIZE];
-	ssize_t recibido = -1;
-	int32_t tamanio=0;
-	//int32_t i=0;
-	if(recv(newsockfd, &tamanio,sizeof(tamanio),0)>0)
-	{
-		fprintf(stderr,"recibi el tamaño de : %i\n",tamanio);
-		/*Se abre el archivo para escritura*/
-		file = fopen("/dev/sdb","wb");
-		//recibir tamaño del archivo
-		while((recibido = recv(newsockfd, buffer,sizeof(buffer), 0)) > 0)
-		{
-			//if(recv(newsockfd, buffer,sizeof(buffer), 0)){};
-			fwrite(buffer,sizeof(char),sizeof(buffer),file);
-			//fprintf(stderr,".");
-			//i++;
-		}
-		fprintf(stderr,"Termino la descarga (enter)");
-		fflush(stdout);
-		fclose(file);
-		sync(); // NUEVO
-		fprintf(stderr,"Calculando Hash MD5\n");
-		char *md5sum=(char*)obtenerMD5("/dev/sdb",tamanio);
-		fprintf(stderr,"MD5: %s\n",md5sum);
-		free(md5sum);
-	}
-}
-/**
  * @brief funcion que genera el MD5sum de un archivo
  * @param char*filename : direccion del archi
  * @return char* md5 : cadena con md5sum
@@ -141,4 +106,131 @@ void salida(int32_t sig)
 		send(sockfd,"exit\n",strlen("exit\n"),0);
 	}
 	exit(0);
+}
+/**
+ * @brief recibe un archivo y lo escribe en la direccion deseada
+ * @param int32_t newsockfd : sockfd del cliente que envia el archio
+ * */
+
+void recibirArchivo(int32_t newsockfd)
+{
+	FILE *file;
+	char buffer[BUFFSIZE];
+	ssize_t recibido = -1;
+	int32_t tamanio=0;
+	//int32_t i=0;
+	if(recv(newsockfd, &tamanio,sizeof(tamanio),0)>0)
+	{
+		fprintf(stderr,"recibi el tamaño de : %i\n",tamanio);
+		/*Se abre el archivo para escritura*/
+		file = fopen("/dev/sdb","wb");
+		if(file != NULL)
+		{
+			//recibir tamaño del archivo
+			while((recibido = recv(newsockfd, buffer,sizeof(buffer), 0)) > 0)
+			{
+				//if(recv(newsockfd, buffer,sizeof(buffer), 0)){};
+				fwrite(buffer,sizeof(char),sizeof(buffer),file);
+				//fprintf(stderr,".");
+				//i++;
+			}
+			fprintf(stderr,"Termino la descarga!\n");
+			fflush(stdout);
+			fclose(file);
+			fprintf(stderr,"Calculando Hash MD5 (esperar)\n");
+			sync(); // NUEVO
+			char *md5sum=(char*)obtenerMD5("/dev/sdb",tamanio);
+			fprintf(stderr,"MD5: %s\n",md5sum);
+			free(md5sum);
+			fprintf(stderr,"Calculando Tabla MBR (esperar)\n");
+			sync(); // NUEVO
+			analisisMbr("/dev/sdb");
+		}
+		else
+		{
+			perror("lectura usb");
+			exit(1);
+		}
+	}
+}
+//NUEVO - PARTE TABLA DE PARTICIONES MBR
+/**
+ * @brief Funcion que ejecuta el analisis mbr, para un maximo de 4 particiones
+ * 
+ * @param direccion_usb 
+ */
+void analisisMbr(char *direccion_usb)
+{
+	printf("Partición\tBooteable\tTipo\tInicio\tTamaño\n");
+	for(int32_t iParticion = 0; iParticion < CANT_PARTICIONES; iParticion++) 
+	{
+
+		struct mbr tabla_mbr;
+		FILE *usb = fopen(direccion_usb, "rb");
+		if(usb != NULL)
+		{
+			fseek(usb, 0L, SEEK_SET);
+			fseek(usb, 446 + 16 * iParticion, SEEK_CUR);
+
+			if(fread(&tabla_mbr, sizeof(tabla_mbr), 1, usb) > 0)
+			fclose(usb);
+		}
+		else
+		{
+			perror("lectura usb");
+			exit(1);
+		}
+
+		char boot[3], tipo[3];
+		char cInicio[8] = "\0";
+		char cTamanio[8]  = "\0";
+
+		sprintf(tipo, "%02x", tabla_mbr.type & 0xff);
+		sprintf(boot, "%02x", tabla_mbr.boot & 0xff);
+		//compruebo si es o no booteable
+		if(!strcmp(boot,"80"))
+			sprintf(boot,"SI");
+		else if( strcmp(boot, "00") == 0 )
+			sprintf(boot,"NO");
+		else
+			sprintf(boot,"ER");
+		/*
+		uint32_t inicio =  __bswap_32 (tabla_mbr.start);
+		uint32_t tamanio =  __bswap_32 (tabla_mbr.size);
+		*/
+		little_to_big(cInicio, tabla_mbr.start);
+		long inicio = strtol(cInicio, NULL, 16);
+		little_to_big(cTamanio, tabla_mbr.size);
+		long tamanio = strtol(cTamanio, NULL, 16);
+
+		tamanio *= 512; //tamaño por el tañamo del sector
+		tamanio /= 1000000;
+		
+		printf("    %i\t\t%s\t\t%s\t%ld\t%ld Mb\n",iParticion+1,boot,tipo,inicio,tamanio);
+		//printf("    %i\t\t%s\t\t%s\t%ld\t%ld Mb\n",iParticion+1,boot,tipo,inicio,tamanio);
+	}
+}
+
+/**
+ * @brief
+ * Función encargada de convertir valores de 4 bytes guardados en little endian
+ * a big endian.
+ * @param big    Valor en big endian.
+ * @param little Valor en little endian.
+ */
+void little_to_big(char big[8], char little[4])
+{
+  char byte[3];
+  for(int i = 2; i >= 0; i--)
+  {
+    sprintf(byte, "%02x", little[i] & 0xff);
+    strcat(big, byte);
+  }
+}
+
+//! Byte swap unsigned int
+uint32_t swap_uint32( uint32_t val )
+{
+    val = ((val << 8) & 0xFF00FF00 ) | ((val >> 8) & 0xFF00FF ); 
+    return (val << 16) | (val >> 16);
 }
