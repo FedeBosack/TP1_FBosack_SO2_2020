@@ -170,7 +170,7 @@ void analisisMbr(char *direccion_usb)
 		if(usb != NULL)
 		{
 			fseek(usb, 0L, SEEK_SET);
-			fseek(usb, 446 + 16 * iParticion, SEEK_CUR);
+			fseek(usb, 446 + 16 * iParticion, SEEK_CUR);//por cada particion (16 bytes)
 
 			if(fread(&tabla_mbr, sizeof(tabla_mbr), 1, usb) > 0)
 			fclose(usb);
@@ -182,9 +182,7 @@ void analisisMbr(char *direccion_usb)
 		}
 
 		char boot[3], tipo[3];
-		char cInicio[8] = "\0";
-		char cTamanio[8]  = "\0";
-
+		
 		sprintf(tipo, "%02x", tabla_mbr.type & 0xff);
 		sprintf(boot, "%02x", tabla_mbr.boot & 0xff);
 		//compruebo si es o no booteable
@@ -194,43 +192,9 @@ void analisisMbr(char *direccion_usb)
 			sprintf(boot,"NO");
 		else
 			sprintf(boot,"ER");
-		/*
-		uint32_t inicio =  __bswap_32 (tabla_mbr.start);
-		uint32_t tamanio =  __bswap_32 (tabla_mbr.size);
-		*/
-		little_to_big(cInicio, tabla_mbr.start);
-		long inicio = strtol(cInicio, NULL, 16);
-		little_to_big(cTamanio, tabla_mbr.size);
-		long tamanio = strtol(cTamanio, NULL, 16);
-
-		tamanio *= 512; //tamaño por el tañamo del sector
-		tamanio /= 1000000;
 		
-		printf("    %i\t\t%s\t\t%s\t%ld\t%ld Mb\n",iParticion+1,boot,tipo,inicio,tamanio);
-		//printf("    %i\t\t%s\t\t%s\t%ld\t%ld Mb\n",iParticion+1,boot,tipo,inicio,tamanio);
+		
+		printf("    %i\t\t%s\t\t%s\t%d\t%d Mb\n",
+				iParticion+1,boot,tipo,tabla_mbr.start,tabla_mbr.size*512/1000000);
 	}
-}
-
-/**
- * @brief
- * Función encargada de convertir valores de 4 bytes guardados en little endian
- * a big endian.
- * @param big    Valor en big endian.
- * @param little Valor en little endian.
- */
-void little_to_big(char big[8], char little[4])
-{
-  char byte[3];
-  for(int i = 2; i >= 0; i--)
-  {
-    sprintf(byte, "%02x", little[i] & 0xff);
-    strcat(big, byte);
-  }
-}
-
-//! Byte swap unsigned int
-uint32_t swap_uint32( uint32_t val )
-{
-    val = ((val << 8) & 0xFF00FF00 ) | ((val >> 8) & 0xFF00FF ); 
-    return (val << 16) | (val >> 16);
 }
